@@ -14,7 +14,7 @@ app.use(express.json())
 app.use(cookieParser())
 
 app.use(cors({
-  origin:'https://kbsbakes.abdurahman.site',
+  origin:process.env.FRONTEND_URL,
   credentials:true
 }))
 
