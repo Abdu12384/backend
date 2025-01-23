@@ -18,6 +18,8 @@ app.use(cors({
   credentials:true
 }))
 
+app.options('*', cors());
+
 connectDB()
 
 app.get('/',(req,res)=>{

@@ -55,6 +55,8 @@ const{
 const { addWishlist, getWishlist, deleteWishlishProduct, removeFromWishlist,  } = require('../controllers/userController/wishlistController')
 const { getAllCoupons } = require('../controllers/adminController/couponController')
 const { getWalletInfo, addMoneyToWallet, placeWalletOrder } = require('../controllers/userController/walletController')
+const { fetchCategory } = require('../controllers/adminController/categoryControll')
+
 
 
 
@@ -63,6 +65,7 @@ const { getWalletInfo, addMoneyToWallet, placeWalletOrder } = require('../contro
 user_Route.get('/home-list-Product',homeListProduct)
           .get('/productshow/:id',productDetails)
           .get('/products-list',varifyToken,cakePage)
+          .get('/categories',varifyToken,fetchCategory)
 
 // Profile Routes          
 user_Route         
