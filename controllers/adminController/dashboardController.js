@@ -5,114 +5,139 @@ const Category = require('../../model/category')
 
 
 
+
 const getDashboardData = async (req, res) => {
-  const {period} = req.query
+  const { period = 'Monthly' } = req.query;
 
   try {
-      console.log(period);
-      let startDate = new Date();
-      const currentDate = new Date();
-  
-      if (period === 'Monthly') {
-        startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      } else if (period === 'Yearly') {
-        startDate = new Date(currentDate.getFullYear(), 0, 1);
-      } else {
-        startDate = new Date(currentDate.getTime() - 7 * 24 * 60 * 60 * 1000);
-      }
-  
-      const matchCondition = { createdAt: { $gte: startDate } };
+    const periodMap = {
+      'Monthly': () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+      'Yearly': () => new Date(new Date().getFullYear(), 0, 1),
+      'Weekly': () => new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    };
+
+    const startDate = periodMap[period] ? periodMap[period]() : new Date(0);
+    const matchCondition = { 
+      orderDate: { $gte: startDate },
+      isDeleted: false 
+    };
+
+
+    const bestSellingProducts = await Order.aggregate([
+      { $match: matchCondition },
+      { $unwind: '$products' },
+      { $match: { 'products.isCanceled': false } },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'products.productId',
+          foreignField: '_id',
+          pipeline: [
+            {
+              $lookup: {
+                from: 'categories',
+                localField: 'category',
+                foreignField: '_id',
+                as: 'categoryDetails'
+              }
+            },
+            { $unwind: '$categoryDetails' }
+          ],
+          as: 'productDetails'
+        }
+      },
+      { $unwind: '$productDetails' },
+      {
+        $group: {
+          _id: '$products.productId',
+          totalQuantitySold: { $sum: '$products.quantity' },
+          totalRevenue: { $sum: { $multiply: ['$products.quantity', '$products.price'] } },
+          productName: { $first: '$productDetails.productName' },
+          productImage: { $first: '$productDetails.images' },
+          categoryName: { $first: '$productDetails.categoryDetails.name' }
+        }
+      },
+      { $sort: { totalQuantitySold: -1 } },
+      { $limit: 5 }
+    ]);
+
+
+    const topCategories = await Order.aggregate([
+      { $match: matchCondition },
+      { $unwind: '$products' },
+      { $match: { 'products.isCanceled': false } },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'products.productId',
+          foreignField: '_id',
+          pipeline: [
+            {
+              $lookup: {
+                from: 'categories',
+                localField: 'category',
+                foreignField: '_id',
+                as: 'categoryDetails'
+              }
+            },
+            { $unwind: '$categoryDetails' }
+          ],
+          as: 'productDetails'
+        }
+      },
+      { $unwind: '$productDetails' },
+      {
+        $group: {
+          _id: '$productDetails.categoryDetails._id',
+          categoryName: { $first: '$productDetails.categoryDetails.name' },
+          totalRevenue: { $sum: { $multiply: ['$products.quantity', '$products.price'] } },
+          totalQuantitySold: { $sum: '$products.quantity' }
+        }
+      },
+      { $sort: { totalRevenue: -1 } },
+      { $limit: 5 }
+    ]);
+
 
     const stats = await Order.aggregate([
-      {$match: matchCondition},
+      { $match: matchCondition },
       {
-        $group:{
-          _id:null,
-          totalRevenue:{$sum:'$totalPrice'},
-          totalOrders: {$sum:1}
-        }
-      },
-      {
-        $project:{
-          _id: 0,
-          totalRevenue: 1,
-          totalOrders: 1
+        $group: {
+          _id: null,
+          totalRevenue: { $sum: '$totalPrice' },
+          totalOrders: { $sum: 1 },
+          averageOrderValue: { $avg: '$totalPrice' },
+          totalDiscount: { $sum: '$discount' }
         }
       }
-    ])
-
-    const bestSellingProducts = await Product.aggregate([
-      {
-        $match:{
-          createdAt: {$gte: startDate}
-        }
-      },
-      {
-        $sort:{ salesCount: -1}
-      },
-      {
-        $limit: 5
-      },
-      {
-        $project:{
-          productName: 1,
-          images:1,
-          salesCount:1
-        } 
-      }
-    ])
-    
-
-    const topCategories = await Category.aggregate([
-      {
-        $match:{
-          createdAt:{$gte: startDate}
-        }
-      },
-      {
-        $sort:{salesCount: -1}
-      },
-      {
-        $limit: 5
-      },
-      {
-        $project:{
-          name:1,
-          salesCount:1
-        }
-      }
-
-    ])
-
-
+    ]);
 
     const dashboardData = {
-      stats: stats[0] || { totalRevenue: 0, totalOrders: 0, totalExpenses: 0 },
+      period,
+      stats: stats[0] || {
+        totalRevenue: 0,
+        totalOrders: 0,
+        averageOrderValue: 0,
+        totalDiscount: 0
+      },
       bestSellingProducts,
       topCategories
     };
 
- console.log(dashboardData)
- 
-
     res.status(200).json({
       success: true,
-      message: "Dashboard data fetched successfully",
-      data: dashboardData,
+      message: "Dashboard data generated successfully",
+      data: dashboardData
     });
-
-  
-    
   } catch (error) {
-    console.error("Error fetching dashboard data:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch dashboard data",
-      error: error.message,
+      message: "Failed to generate dashboard data",
+      error: error.message
     });
-
   }
-}
+};
+
 
 
 

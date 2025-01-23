@@ -6,8 +6,11 @@ const addCoupon = async (req, res)=>{
     const {code, discount, minAmount, maxAmount, expiryDate} = req.body
 
   
-  const existingCoupon = await Coupon.findOne({ code });
-  if (existingCoupon) {
+    const existingCoupon = await Coupon.findOne({
+      code: { $regex: new RegExp(`^${code}$`, 'i') }
+     });
+     
+    if (existingCoupon) {
     return res.status(400).json({ message: 'Coupon code already exists' });
   }
     const coupon = new Coupon({
