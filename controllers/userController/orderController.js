@@ -341,6 +341,8 @@ const cancelOrder = async (req, res) =>{
     }
   }
 
+  refundAmount -= (order.discount || 0);
+  refundAmount = Math.max(0, refundAmount);
     
     order.status = 'cancelled'
     order.cancelReason = reason
