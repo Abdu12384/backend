@@ -141,76 +141,100 @@ const getDashboardData = async (req, res) => {
 
 
 
-
-
 const chartData = async (req, res) => {
-  const { period } = req.query;
+  console.log(`chartData is running with period=${req.query.period}`); 
+  const { period = 'Monthly' } = req.query; 
 
   try {
     let startDate;
     const currentDate = new Date();
 
-
+    
     if (period === 'Monthly') {
       startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
     } else if (period === 'Yearly') {
       startDate = new Date(currentDate.getFullYear(), 0, 1);
+    } else if (period === 'Weekly') {
+      const dayOfWeek = currentDate.getDay(); 
+      startDate = new Date(currentDate.getTime() - dayOfWeek * 24 * 60 * 60 * 1000); 
     } else {
-
-      const dayOfWeek = currentDate.getDay();
-      startDate = new Date(currentDate.getTime() - dayOfWeek * 24 * 60 * 60 * 1000);
+      return res.status(400).json({ message: 'Invalid period specified' });
     }
 
-
+   
     const chartData = await Order.aggregate([
-      { $match: { createdAt: { $gte: startDate } } }, 
+      
+      { $match: { createdAt: { $gte: startDate } } },
       {
+       
         $group: {
           _id: {
             year: { $year: { date: '$createdAt', timezone: 'Asia/Kolkata' } },
-            ...(period === 'Yearly' ? {} : { month: { $month: { date: '$createdAt', timezone: 'Asia/Kolkata' } } }),
-            ...(period === 'Weekly' ? { week: { $week: { date: '$createdAt', timezone: 'Asia/Kolkata' } } } : {}),
+            ...(period === 'Monthly'
+              ? { month: { $month: { date: '$createdAt', timezone: 'Asia/Kolkata' } } }
+              : {}),
+            ...(period === 'Weekly'
+              ? {
+                  dayOfWeek: { $dayOfWeek: { date: '$createdAt', timezone: 'Asia/Kolkata' } }, 
+                }
+              : {}),
           },
           revenue: { $sum: '$totalPrice' },
-          expenses: { $sum: '$totalExpenses' }, 
         },
       },
       {
-        $sort: { '_id.year': 1, '_id.month': 1, '_id.week': 1 }, 
+        
+        $sort: {
+          '_id.year': 1,
+          ...(period === 'Monthly' ? { '_id.month': 1 } : {}),
+          ...(period === 'Weekly' ? { '_id.dayOfWeek': 1 } : {}),
+        },
       },
       {
+        
         $project: {
           name: {
-            $concat: [
-              period === 'Yearly'
-                ? { $toString: '$_id.year' }
-                : period === 'Monthly'
-                ? {
+            $cond: [
+              { $eq: [period, 'Yearly'] },
+              { $toString: '$_id.year' },
+              {
+                $cond: [
+                  { $eq: [period, 'Monthly'] },
+                  {
                     $concat: [
-                      { $arrayElemAt: ['Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' '), { $subtract: ['$_id.month', 1] }] },
+                      {
+                        $arrayElemAt: [
+                          'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' '),
+                          { $subtract: ['$_id.month', 1] },
+                        ],
+                      },
                       ' ',
                       { $toString: '$_id.year' },
                     ],
-                  }
-                : {
-                    $concat: ['Week ', { $toString: '$_id.week' }, ' ', { $toString: '$_id.year' }],
                   },
+                  {
+                   
+                    $arrayElemAt: [
+                      ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+                      { $subtract: ['$_id.dayOfWeek', 1] },
+                    ],
+                  },
+                ],
+              },
             ],
           },
           revenue: 1,
-          expenses: 1,
         },
       },
     ]);
 
+    console.log(`chartData is returning ${chartData.length} records`); 
     res.status(200).json(chartData);
   } catch (error) {
     console.error('Error fetching chart data:', error);
     res.status(500).json({ message: 'Failed to fetch chart data', error: error.message });
   }
 };
-
-
 
 
 
