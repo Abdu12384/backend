@@ -226,6 +226,13 @@ const updateReturnRequest = async (req, res) => {
           product => product._id.toString() === productId
       );
 
+      if (returnProduct.returnRequest?.status === 'approved' && status !== 'approved') {
+        return res.status(400).json({
+          success: false,
+          message: 'Cannot change status once it has been approved',
+        });
+      }
+
       if (status === 'approved') {
           const refundAmount = returnProduct.price * returnProduct.quantity;
 
